@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 
+from dataset import BilingualDataset, causal_mask
+
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
@@ -45,4 +47,23 @@ def get_ds(config):
     val_ds_size = int(0.1 * len(ds_raw))
     
     train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_raw])
+    
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config["seq_len"])
+    valid_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config["seq_len"])
+    
+    max_len_src = 0
+    max_len_tgt = 0
+    
+    for item in ds_raw:
+        src_ids = tokenizer_src.encode(item["translation"][config["lang_src"]]).ids
+        tgt_ids = tokenizer_tgt.encode(item["translation"][config["lang_tgt"]]).ids
+        max_len_src = max(max_len_src, len(src_ids))
+        max_len_tgt = max(max_len_tgt, len(tgt_ids))
         
+    print(f"Max length of source language: {max_len_src}")
+    print(f"Max length of target language: {max_len_tgt}")
+    
+    train_dataloader = DataLoader(train_ds, batch_size=config["batch_size"], shuffle=True)
+    valid_dataloader = DataLoader(valid_ds, batch_size=1, shuffle=False)
+    
+    return train_dataloader, valid_dataloader, tokenizer_src, tokenizer_tgt
