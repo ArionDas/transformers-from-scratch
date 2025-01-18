@@ -14,10 +14,11 @@ class BilingualDataset(nn.Module):
         self.tokenizer_tgt = tokenizer_tgt
         self.src_lang = src_lang
         self.tgt_lang = tgt_lang
+        self.seq_len = seq_len
         
-        self.sos_token = torch.Tensor(tokenizer_src.token_to_id("[SOS]"), dtype=torch.long)
-        self.eos_token = torch.Tensor(tokenizer_src.token_to_id("[EOS]"), dtype=torch.long)
-        self.pad_token = torch.Tensor(tokenizer_src.token_to_id("[PAD]"), dtype=torch.long)
+        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
+        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
+        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
         
         
     def __len__(self):
@@ -32,8 +33,8 @@ class BilingualDataset(nn.Module):
         tgt_text = src_target_pair["translation"][self.tgt_lang]
         
         ## tokenizing the text (in one pass)
-        enc_input_tokens = self.tokenizer_src.encoder(src_text).ids
-        dec_input_tokens = self.tokenizer_tgt.encoder(tgt_text).ids
+        enc_input_tokens = self.tokenizer_src.encode(src_text).ids
+        dec_input_tokens = self.tokenizer_tgt.encode(tgt_text).ids
         
         ## adding special tokens
         enc_num_padding_tokens = self.seq_len - len(enc_input_tokens) - 2 ## 2 for [SOS] and [EOS]
@@ -65,7 +66,7 @@ class BilingualDataset(nn.Module):
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor([self.pad_tokens] * dec_num_padding_tokens, dtype=torch.int64)
+                torch.tensor([self.pad_token] * dec_num_padding_tokens, dtype=torch.int64)
             ]
         )
         

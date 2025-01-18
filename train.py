@@ -30,10 +30,10 @@ def get_tokenizer(config, ds, lang):
     tokenizer_path = Path(config["tokenizer_file"].format(lang))
     
     if not Path.exists(tokenizer_path):
-        tokenizer = Tokenizer(WordLevel(unk_tokens=["[UNK]"]))
+        tokenizer = Tokenizer(WordLevel(unk_token="[UNK]"))
         tokenizer.pre_tokenizer = Whitespace()
         trainer = WordLevelTrainer(special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"], min_frequency=2)
-        tokenizer.train_from_iterator(ds[lang], trainer=trainer)
+        tokenizer.train_from_iterator(get_all_sentences(ds, lang), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
     else:
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
@@ -43,7 +43,7 @@ def get_tokenizer(config, ds, lang):
 
 def get_ds(config):
     
-    ds_raw = load_dataset("Helsinki-NLP/opus_books", f"{config["lang_src"]}-{config["lang_tgt"]}", split="train")
+    ds_raw = load_dataset("Helsinki-NLP/opus_books", f"{config['lang_src']}-{config['lang_tgt']}", split="train")
     
     ## build tokenizer
     tokenizer_src = get_tokenizer(config, ds_raw, config["lang_src"])
@@ -51,12 +51,12 @@ def get_ds(config):
     
     ## train-validation split
     train_ds_size = int(0.9 * len(ds_raw))
-    val_ds_size = int(0.1 * len(ds_raw))
+    val_ds_size = len(ds_raw) - train_ds_size
     
-    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_raw])
+    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
     
-    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config["seq_len"])
-    valid_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config["seq_len"])
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config["lang_src"], config["lang_tgt"], config["seq_len"])
+    valid_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config["lang_src"], config["lang_tgt"], config["seq_len"])
     
     max_len_src = 0
     max_len_tgt = 0
@@ -77,7 +77,7 @@ def get_ds(config):
 
 
 def get_model(config, vocab_src_len, vocab_tgt_len):
-    model = build_transformer(vocab_src_len, vocab_tgt_len, config['seq_len'], config['tgt_len'], config['d_model'])
+    model = build_transformer(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'], config['d_model'])
     return model
 
 
@@ -98,7 +98,7 @@ def train_model(config):
     ## optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"], eps=1e-9)
     
-    inital_epoch = 0
+    initial_epoch = 0
     global_step = 0
     
     if config["preload"]:
@@ -127,7 +127,7 @@ def train_model(config):
             decoder_output = model.decode(decoder_input, encoder_output, encoder_mask, decoder_mask) ## (b, seq_len, d_model)
             proj_output = model.project(decoder_output) ## (b, seq_len, vocab_tgt_len)
             
-            label = batch('label').to(device) ## (b, seq_len)
+            label = batch['label'].to(device) ## (b, seq_len)
             
             ## (b, seq_len, vocab_tgt_len) -> (b * seq_len, vocab_tgt_len)
             loss = loss_fn(proj_output.view(-1, tokenizer_tgt.get_vocab_size()), label.view(-1))
