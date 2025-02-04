@@ -12,7 +12,7 @@ class InputEmbeddings(nn.Module):
         self.embedding = nn.Embedding(vocab_size, d_model)
         
     def forward(self, x):
-        return self.embedding(x) * math.sqrt(self.d_model)
+        return self.embedding(x.long()) * math.sqrt(self.d_model)
     
 
 class PositionalEncoding(nn.Module):
